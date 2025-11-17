@@ -32,8 +32,21 @@ The framework ensures that all language bindings (Go, Python, Rust, etc.) behave
 **This repository contains:**
 1. [**Test Runner**](./cmd/runner/main.go): Spawns handler binary, sends test requests via stdin, validates responses from stdout
 2. [**Test Cases**](./testdata): JSON files defining requests and expected responses
+3. [**Mock Handler**](./cmd/mock-handler/main.go): Validates the runner by echoing expected responses from test cases
 
 **Handler binaries** are not hosted in this repository. They must be implemented separately and should:
 - Implement the JSON protocol for communication with the test runner
 - Call the binding API to execute operations
 - Pin to a specific version/tag of this test repository
+
+## Getting Started
+
+Build and test against the mock handler:
+
+```bash
+# Build both runner and mock handler
+make build
+
+# Run tests against the mock handler
+make test
+```
