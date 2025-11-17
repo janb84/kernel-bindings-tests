@@ -1,11 +1,13 @@
-package main
+package runner
 
 import (
 	"bufio"
 	"bytes"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -245,6 +247,26 @@ type SingleTestResult struct {
 // LoadTestSuite loads a test suite from a JSON file
 func LoadTestSuite(filePath string) (*TestSuite, error) {
 	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var suite TestSuite
+	if err := json.Unmarshal(data, &suite); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Set suite name from filename if not specified
+	if suite.Name == "" {
+		suite.Name = filepath.Base(filePath)
+	}
+
+	return &suite, nil
+}
+
+// LoadTestSuiteFromFS loads a test suite from an embedded filesystem
+func LoadTestSuiteFromFS(fsys embed.FS, filePath string) (*TestSuite, error) {
+	data, err := fs.ReadFile(fsys, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}

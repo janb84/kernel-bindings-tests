@@ -15,9 +15,9 @@ The framework ensures that all language bindings (Go, Python, Rust, etc.) behave
 
 ```
 ┌─────────────┐         ┌──────────────────┐
-│ Orchestrator│────────▶│  Handler Binary  │
-│  (Go Test   │ stdin   │  (Go/Rust/etc)   │
-│   Runner)   │◀────────│                  │
+│ Test Runner │────────▶│  Handler Binary  │
+│  (Go CLI)   │ stdin   │  (Go/Rust/etc)   │
+│             │◀────────│                  │
 └─────────────┘ stdout  └──────────────────┘
        │                         │
        │                         │
@@ -25,15 +25,15 @@ The framework ensures that all language bindings (Go, Python, Rust, etc.) behave
   ┌─────────┐            ┌────────────────┐
   │ Test    │            │ Binding API    │
   │ Cases   │            └────────────────┘
-  │ (JSON)  │            
+  │ (JSON)  │
   └─────────┘
 ```
 
 **This repository contains:**
-1. [**Orchestrator**](./orchestrator): Spawns handler binary, sends test requests via stdin, validates responses from stdout
+1. [**Test Runner**](./cmd/runner/main.go): Spawns handler binary, sends test requests via stdin, validates responses from stdout
 2. [**Test Cases**](./testdata): JSON files defining requests and expected responses
 
 **Handler binaries** are not hosted in this repository. They must be implemented separately and should:
-- Implement the JSON protocol for communication with the orchestrator
+- Implement the JSON protocol for communication with the test runner
 - Call the binding API to execute operations
 - Pin to a specific version/tag of this test repository
