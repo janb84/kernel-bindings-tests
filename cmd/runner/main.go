@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/stringintech/kernel-bindings-tests/runner"
+	"github.com/stringintech/kernel-bindings-tests/testdata"
 )
 
 func main() {
 	handlerPath := flag.String("handler", "", "Path to handler binary")
-	testDir := flag.String("testdir", "", "Directory containing test JSON files")
-	testFile := flag.String("testfile", "", "Single test file to run")
 	flag.Parse()
 
 	if *handlerPath == "" {
@@ -20,23 +21,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *testDir == "" && *testFile == "" {
-		fmt.Fprintf(os.Stderr, "Error: either -testdir or -testfile must be specified\n")
-		flag.Usage()
+	// Collect embedded test files
+	testFiles, err := fs.Glob(testdata.FS, "*.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error finding test files: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Collect test files
-	var testFiles []string
-	if *testFile != "" {
-		testFiles = []string{*testFile}
-	} else {
-		files, err := filepath.Glob(filepath.Join(*testDir, "*.json"))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error finding test files: %v\n", err)
-			os.Exit(1)
-		}
-		testFiles = files
 	}
 
 	if len(testFiles) == 0 {
@@ -50,25 +39,25 @@ func main() {
 	totalTests := 0
 
 	for _, testFile := range testFiles {
-		fmt.Printf("\n=== Running test suite: %s ===\n", filepath.Base(testFile))
+		fmt.Printf("\n=== Running test suite: %s ===\n", testFile)
 
-		// Load test suite
-		suite, err := LoadTestSuite(testFile)
+		// Load test suite from embedded FS
+		suite, err := runner.LoadTestSuiteFromFS(testdata.FS, testFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading test suite: %v\n", err)
 			continue
 		}
 
 		// Create test runner
-		runner, err := NewTestRunner(*handlerPath)
+		testRunner, err := runner.NewTestRunner(*handlerPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating test runner: %v\n", err)
 			continue
 		}
 
 		// Run suite
-		result := runner.RunTestSuite(*suite)
-		runner.Close()
+		result := testRunner.RunTestSuite(*suite)
+		testRunner.Close()
 
 		printResults(result)
 
@@ -90,7 +79,7 @@ func main() {
 	}
 }
 
-func printResults(result TestResult) {
+func printResults(result runner.TestResult) {
 	fmt.Printf("\nTest Suite: %s\n", result.SuiteName)
 	fmt.Printf("Total: %d, Passed: %d, Failed: %d\n\n", result.TotalTests, result.PassedTests, result.FailedTests)
 

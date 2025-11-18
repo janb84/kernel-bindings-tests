@@ -1,37 +1,27 @@
-.PHONY: all build test test-single clean
+.PHONY: all build test clean runner mock-handler deps lint
+
+BUILD_DIR := build
+RUNNER_BIN := $(BUILD_DIR)/runner
+MOCK_HANDLER_BIN := $(BUILD_DIR)/mock-handler
 
 all: build test
 
-build:
-	@echo "Building orchestrator binary..."
-	mkdir -p bin
-	cd orchestrator && go build -o ./bin/orchestrator
-	@echo "Building go-handler binary..."
-	cd go-handler/go-bitcoinkernel && $(MAKE) build-kernel && $(MAKE) build
-	cd go-handler && go build -o ./bin/go-handler
-	@echo "Building rust-handler binary..."
-	cd rust-handler && cargo build --release
-	@echo "Build complete!"
+build: runner mock-handler
+
+runner:
+	@echo "Building test runner..."
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(RUNNER_BIN) ./cmd/runner
+
+mock-handler:
+	@echo "Building mock handler..."
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(MOCK_HANDLER_BIN) ./cmd/mock-handler
 
 test:
-	@echo "Running all conformance tests with go-handler..."
-	-./orchestrator/bin/orchestrator -handler ./go-handler/bin/go-handler -testdir testdata
-	@echo "Running all conformance tests with rust-handler..."
-	-./orchestrator/bin/orchestrator -handler ./rust-handler/target/release/rust-handler -testdir testdata
-
-test-single:
-	@if [ -z "$(TEST)" ]; then \
-		echo "Error: TEST variable not set. Usage: make test-single TEST=testdata/chainstate_basic.json"; \
-		exit 1; \
-	fi
-	@echo "Running test with go-handler: $(TEST)"
-	./bin/orchestrator -handler ./go-handle/bin/go-handler -testfile $(TEST)
-	@echo "Running test with rust-handler: $(TEST)"
-	./bin/orchestrator -handler ./rust-handler/target/release/rust-handler -testfile $(TEST)
+	@echo "Running conformance tests with mock handler..."
+	$(RUNNER_BIN) -handler $(MOCK_HANDLER_BIN)
 
 clean:
 	@echo "Cleaning build artifacts..."
-	cd go-handler/go-bitcoinkernel && $(MAKE) clean
-	cd orchestrator && go clean && rm -rf build
-	cd go-handler && go clean && rm -rf build
-	cd rust-handler && cargo clean
+	rm -rf $(BUILD_DIR)

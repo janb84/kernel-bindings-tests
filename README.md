@@ -1,6 +1,6 @@
 # Bitcoin Kernel Binding Conformance Tests
 
-This directory contains a language-agnostic conformance testing framework for Bitcoin Kernel bindings.
+This repository contains a language-agnostic conformance testing framework for Bitcoin Kernel bindings.
 
 ## ⚠️ Work in Progress
 
@@ -15,9 +15,9 @@ The framework ensures that all language bindings (Go, Python, Rust, etc.) behave
 
 ```
 ┌─────────────┐         ┌──────────────────┐
-│ Orchestrator│────────▶│  Handler Binary  │
-│  (Go Test   │ stdin   │  (Go/Rust/etc)   │
-│   Runner)   │◀────────│                  │
+│ Test Runner │────────▶│  Handler Binary  │
+│  (Go CLI)   │ stdin   │  (Go/Rust/etc)   │
+│             │◀────────│                  │
 └─────────────┘ stdout  └──────────────────┘
        │                         │
        │                         │
@@ -25,43 +25,28 @@ The framework ensures that all language bindings (Go, Python, Rust, etc.) behave
   ┌─────────┐            ┌────────────────┐
   │ Test    │            │ Binding API    │
   │ Cases   │            └────────────────┘
-  │ (JSON)  │            
+  │ (JSON)  │
   └─────────┘
 ```
 
-1. [**Orchestrator**](./orchestrator): Spawns handler binary, sends test requests, validates responses
-2. **Handler Binary**: Implements protocol, calls binding API, returns results
-   - [Go handler](./go-handler) for the [Go binding](https://github.com/stringintech/go-bitcoinkernel)
-   - [Rust handler](./rust-handler) for the [Rust binding](https://github.com/TheCharlatan/rust-bitcoinkernel)
-3. [**Test Cases**](./testdata): JSON files defining requests and expected responses
+**This repository contains:**
+1. [**Test Runner**](./cmd/runner/main.go): Spawns handler binary, sends test requests via stdin, validates responses from stdout
+2. [**Test Cases**](./testdata): JSON files defining requests and expected responses
+3. [**Mock Handler**](./cmd/mock-handler/main.go): Validates the runner by echoing expected responses from test cases
+
+**Handler binaries** are not hosted in this repository. They must be implemented separately and should:
+- Implement the JSON protocol for communication with the test runner
+- Call the binding API to execute operations
+- Pin to a specific version/tag of this test repository
 
 ## Getting Started
 
-### Cloning
-
-Clone the repository with submodules:
+Build and test against the mock handler:
 
 ```bash
-git clone --recurse-submodules https://github.com/stringintech/kernel-bindings-spec.git
-```
-**Note:** go-handler currently depends on go-bitcoinkernel via a submodule.
-
-
-### Building
-
-Use the provided Makefile to build the project:
-
-```bash
-# Build everything!
+# Build both runner and mock handler
 make build
-```
 
-### Running Tests
-
-```bash
-# Run all conformance tests with both Go and Rust handlers
+# Run tests against the mock handler
 make test
-
-# Run a specific test file with both Go and Rust handlers
-make test-single TEST=testdata/chainstate_basic.json
 ```
