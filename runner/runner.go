@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // TestRunner executes test suites against a handler binary
@@ -64,9 +63,8 @@ func (tr *TestRunner) Close() error {
 	if tr.stdin != nil {
 		tr.stdin.Close()
 	}
-	if tr.cmd != nil && tr.cmd.Process != nil {
-		tr.cmd.Process.Kill()
-		tr.cmd.Wait()
+	if tr.cmd != nil {
+		return tr.cmd.Wait()
 	}
 	return nil
 }
@@ -139,36 +137,36 @@ func (tr *TestRunner) runTest(test TestCase) SingleTestResult {
 			Message: fmt.Sprintf("Response ID mismatch: expected %s, got %s", test.ID, resp.ID),
 		}
 	}
-	return tr.validateResponse(test, resp)
+	return validateResponse(test, resp)
 }
 
 // validateResponse checks if response matches expected result
-func (tr *TestRunner) validateResponse(test TestCase, resp *Response) SingleTestResult {
+func validateResponse(test TestCase, resp *Response) SingleTestResult {
 	// Check if we expected an error
 	if test.Expected.Error != nil {
 		if resp.Error == nil {
 			return SingleTestResult{
 				TestID:  test.ID,
 				Passed:  false,
-				Message: fmt.Sprintf("Expected error %s, but got success", test.Expected.Error.Code),
+				Message: fmt.Sprintf("Expected error type %s, but got no error", test.Expected.Error.Type),
 			}
 		}
 
-		// Check error code
-		if resp.Error.Code != test.Expected.Error.Code {
+		// Check error type
+		if resp.Error.Type != test.Expected.Error.Type {
 			return SingleTestResult{
 				TestID:  test.ID,
 				Passed:  false,
-				Message: fmt.Sprintf("Expected error code %s, got %s", test.Expected.Error.Code, resp.Error.Code),
+				Message: fmt.Sprintf("Expected error type %s, got %s", test.Expected.Error.Type, resp.Error.Type),
 			}
 		}
 
-		// Check error message if specified
-		if test.Expected.Error.Message != "" && !strings.Contains(resp.Error.Message, test.Expected.Error.Message) {
+		// Check error variant if specified
+		if test.Expected.Error.Variant != "" && resp.Error.Variant != test.Expected.Error.Variant {
 			return SingleTestResult{
 				TestID:  test.ID,
 				Passed:  false,
-				Message: fmt.Sprintf("Expected error message containing '%s', got '%s'", test.Expected.Error.Message, resp.Error.Message),
+				Message: fmt.Sprintf("Expected error variant %s, got %s", test.Expected.Error.Variant, resp.Error.Variant),
 			}
 		}
 
@@ -182,10 +180,22 @@ func (tr *TestRunner) validateResponse(test TestCase, resp *Response) SingleTest
 	// Check if we expected success
 	if test.Expected.Success != nil {
 		if resp.Error != nil {
+			errMsg := fmt.Sprintf("Expected success, but got error: %s", resp.Error.Type)
+			if resp.Error.Variant != "" {
+				errMsg += fmt.Sprintf(" (variant: %s)", resp.Error.Variant)
+			}
 			return SingleTestResult{
 				TestID:  test.ID,
 				Passed:  false,
-				Message: fmt.Sprintf("Expected success, but got error: %s - %s", resp.Error.Code, resp.Error.Message),
+				Message: errMsg,
+			}
+		}
+
+		if resp.Success == nil {
+			return SingleTestResult{
+				TestID:  test.ID,
+				Passed:  false,
+				Message: "Expected success, but response contained no success field",
 			}
 		}
 
@@ -198,7 +208,7 @@ func (tr *TestRunner) validateResponse(test TestCase, resp *Response) SingleTest
 				Message: fmt.Sprintf("Invalid expected JSON: %v", err),
 			}
 		}
-		if err := json.Unmarshal(bytes.TrimSpace(resp.Result), &actualData); err != nil {
+		if err := json.Unmarshal(bytes.TrimSpace(*resp.Success), &actualData); err != nil {
 			return SingleTestResult{
 				TestID:  test.ID,
 				Passed:  false,
@@ -212,7 +222,7 @@ func (tr *TestRunner) validateResponse(test TestCase, resp *Response) SingleTest
 			return SingleTestResult{
 				TestID:  test.ID,
 				Passed:  false,
-				Message: fmt.Sprintf("Result mismatch:\nExpected: %s\nActual:   %s", string(expectedNormalized), string(actualNormalized)),
+				Message: fmt.Sprintf("Success mismatch:\nExpected: %s\nActual:   %s", string(expectedNormalized), string(actualNormalized)),
 			}
 		}
 		return SingleTestResult{
@@ -242,26 +252,6 @@ type SingleTestResult struct {
 	TestID  string
 	Passed  bool
 	Message string
-}
-
-// LoadTestSuite loads a test suite from a JSON file
-func LoadTestSuite(filePath string) (*TestSuite, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	var suite TestSuite
-	if err := json.Unmarshal(data, &suite); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	// Set suite name from filename if not specified
-	if suite.Name == "" {
-		suite.Name = filepath.Base(filePath)
-	}
-
-	return &suite, nil
 }
 
 // LoadTestSuiteFromFS loads a test suite from an embedded filesystem

@@ -59,7 +59,7 @@ func main() {
 		result := testRunner.RunTestSuite(*suite)
 		testRunner.Close()
 
-		printResults(result)
+		printResults(suite, result)
 
 		totalPassed += result.PassedTests
 		totalFailed += result.FailedTests
@@ -79,16 +79,28 @@ func main() {
 	}
 }
 
-func printResults(result runner.TestResult) {
+func printResults(suite *runner.TestSuite, result runner.TestResult) {
 	fmt.Printf("\nTest Suite: %s\n", result.SuiteName)
+	if suite.Description != "" {
+		fmt.Printf("Description: %s\n", suite.Description)
+	}
 	fmt.Printf("Total: %d, Passed: %d, Failed: %d\n\n", result.TotalTests, result.PassedTests, result.FailedTests)
 
-	for _, tr := range result.TestResults {
+	for i, tr := range result.TestResults {
 		status := "✓"
 		if !tr.Passed {
 			status = "✗"
 		}
-		fmt.Printf("  %s %s: %s\n", status, tr.TestID, tr.Message)
+
+		// Print test ID and description if available
+		if suite.Tests[i].Description != "" {
+			fmt.Printf("  %s %s (%s)\n", status, tr.TestID, suite.Tests[i].Description)
+		} else {
+			fmt.Printf("  %s %s\n", status, tr.TestID)
+		}
+
+		// Print message indented
+		fmt.Printf("      %s\n", tr.Message)
 	}
 
 	fmt.Printf("\n")

@@ -6,31 +6,27 @@ import (
 
 // TestCase represents a single test case
 type TestCase struct {
-	ID       string          `json:"id"`
-	Method   string          `json:"method"`
-	Params   json.RawMessage `json:"params"`
-	Expected TestExpectation `json:"expected"`
+	ID          string          `json:"id"`
+	Description string          `json:"description,omitempty"`
+	Method      string          `json:"method"`
+	Params      json.RawMessage `json:"params"`
+	Expected    TestExpectation `json:"expected"`
 }
 
 // TestExpectation defines what response is expected
 type TestExpectation struct {
 	Success *json.RawMessage `json:"success,omitempty"` // Expected successful result
-	Error   *ErrorPattern    `json:"error,omitempty"`   // Expected error
-}
-
-// ErrorPattern defines expected error fields
-type ErrorPattern struct {
-	Code    string `json:"code"`
-	Message string `json:"message,omitempty"` // Optional - if empty, any message is accepted
+	Error   *Error           `json:"error,omitempty"`   // Expected error
 }
 
 // TestSuite represents a collection of test cases
 type TestSuite struct {
-	Name  string     `json:"name"`
-	Tests []TestCase `json:"tests"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Tests       []TestCase `json:"tests"`
 }
 
-// Request represents a JSON-RPC style request
+// Request represents a request sent to the handler
 type Request struct {
 	ID     string          `json:"id"`
 	Method string          `json:"method"`
@@ -39,13 +35,13 @@ type Request struct {
 
 // Response represents a response from the handler
 type Response struct {
-	ID     string          `json:"id"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *ErrorObj       `json:"error,omitempty"`
+	ID      string           `json:"id"`
+	Success *json.RawMessage `json:"success,omitempty"`
+	Error   *Error           `json:"error,omitempty"`
 }
 
-// ErrorObj represents an error response
-type ErrorObj struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+// Error represents an error response
+type Error struct {
+	Type    string `json:"type"`
+	Variant string `json:"variant,omitempty"`
 }

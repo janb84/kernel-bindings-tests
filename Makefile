@@ -1,4 +1,4 @@
-.PHONY: all build test clean runner mock-handler deps lint
+.PHONY: all build test clean runner mock-handler
 
 BUILD_DIR := build
 RUNNER_BIN := $(BUILD_DIR)/runner

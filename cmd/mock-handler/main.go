@@ -80,9 +80,9 @@ func handleRequest(line string, testIndex map[string]string) error {
 	if !ok {
 		resp := runner.Response{
 			ID: req.ID,
-			Error: &runner.ErrorObj{
-				Code:    "UNKNOWN_TEST",
-				Message: fmt.Sprintf("No test case found with ID: %s", req.ID),
+			Error: &runner.Error{
+				Type:    "Handler",
+				Variant: "UnknownTest",
 			},
 		}
 		return writeResponse(resp)
@@ -93,9 +93,9 @@ func handleRequest(line string, testIndex map[string]string) error {
 	if err != nil {
 		resp := runner.Response{
 			ID: req.ID,
-			Error: &runner.ErrorObj{
-				Code:    "LOAD_ERROR",
-				Message: fmt.Sprintf("Failed to load test suite: %v", err),
+			Error: &runner.Error{
+				Type:    "Handler",
+				Variant: "LoadError",
 			},
 		}
 		return writeResponse(resp)
@@ -112,9 +112,9 @@ func handleRequest(line string, testIndex map[string]string) error {
 	if testCase == nil {
 		resp := runner.Response{
 			ID: req.ID,
-			Error: &runner.ErrorObj{
-				Code:    "TEST_NOT_FOUND",
-				Message: fmt.Sprintf("Test case %s not found in file %s", req.ID, filename),
+			Error: &runner.Error{
+				Type:    "Handler",
+				Variant: "TestNotFound",
 			},
 		}
 		return writeResponse(resp)
@@ -124,27 +124,20 @@ func handleRequest(line string, testIndex map[string]string) error {
 	if req.Method != testCase.Method {
 		resp := runner.Response{
 			ID: req.ID,
-			Error: &runner.ErrorObj{
-				Code:    "METHOD_MISMATCH",
-				Message: fmt.Sprintf("Expected method %s, got %s", testCase.Method, req.Method),
+			Error: &runner.Error{
+				Type:    "Handler",
+				Variant: "MethodMismatch",
 			},
 		}
 		return writeResponse(resp)
 	}
 
 	// Build response based on expected result
-	var resp runner.Response
-	resp.ID = req.ID
-	if testCase.Expected.Error != nil {
-		resp.Error = &runner.ErrorObj{
-			Code:    testCase.Expected.Error.Code,
-			Message: testCase.Expected.Error.Message,
-		}
-	}
-	if testCase.Expected.Success != nil {
-		resp.Result = *testCase.Expected.Success
-	}
-	return writeResponse(resp)
+	return writeResponse(runner.Response{
+		ID:      req.ID,
+		Success: testCase.Expected.Success,
+		Error:   testCase.Expected.Error,
+	})
 }
 
 // writeResponse writes a response to stdout as JSON
