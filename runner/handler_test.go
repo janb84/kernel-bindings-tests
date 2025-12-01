@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -16,14 +17,17 @@ const (
 	// envTestHelperName specifies which helper function to execute in subprocess mode.
 	envTestHelperName = "TEST_HELPER_NAME"
 
+	// Handler simulation test identifiers.
 	helperNameNormal       = "normal"
 	helperNameUnresponsive = "unresponsive"
+	helperNameCrash        = "crash"
 )
 
 // testHelpers maps helper names to functions that simulate different handler behaviors.
 var testHelpers = map[string]func(){
 	helperNameNormal:       helperNormal,
 	helperNameUnresponsive: helperUnresponsive,
+	helperNameCrash:        helperCrash,
 }
 
 // TestMain allows the test binary to serve two purposes:
@@ -132,6 +136,49 @@ func helperUnresponsive() {
 	for scanner.Scan() {
 		// Sleep indefinitely to simulate unresponsiveness
 		time.Sleep(1 * time.Hour)
+	}
+}
+
+// TestHandler_Crash tests that the runner correctly handles a handler that crashes
+// while processing a request
+func TestHandler_Crash(t *testing.T) {
+	h, err := newHandlerForTest(t, helperNameCrash, 0)
+	if err != nil {
+		t.Fatalf("Failed to create handler: %v", err)
+	}
+	defer h.Close()
+
+	// Send a request to the handler
+	request := `{"id":1,"method":"test"}`
+	if err := h.SendLine([]byte(request)); err != nil {
+		t.Fatalf("Failed to send request: %v", err)
+	}
+
+	// Try to read the response - should get ErrHandlerClosed
+	_, err = h.ReadLine()
+
+	if err == nil {
+		t.Fatal("Expected error from crashed handler, got nil")
+	}
+
+	// Verify it's the handler closed error we expect
+	if !errors.Is(err, ErrHandlerClosed) {
+		t.Errorf("Expected ErrHandlerClosed, got: %v", err)
+	}
+
+	// Verify the error message contains the panic string from stderr
+	if !strings.Contains(err.Error(), "simulated handler crash") {
+		t.Errorf("Expected error to contain 'simulated handler crash', got: %v", err)
+	}
+}
+
+// helperCrash simulates a handler that crashes while processing a request,
+// triggering the ErrHandlerClosed error in the runner.
+func helperCrash() {
+	// Read requests from stdin but panic instead of responding
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		panic("simulated handler crash")
 	}
 }
 
