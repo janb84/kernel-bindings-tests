@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -15,6 +16,7 @@ import (
 func main() {
 	handlerPath := flag.String("handler", "", "Path to handler binary")
 	handlerTimeout := flag.Duration("handler-timeout", 10*time.Second, "Max time to wait for handler to respond to each test case (e.g., 10s, 500ms)")
+	timeout := flag.Duration("timeout", 30*time.Second, "Total timeout for executing all test suites (e.g., 30s, 1m)")
 	flag.Parse()
 
 	if *handlerPath == "" {
@@ -36,12 +38,16 @@ func main() {
 	}
 
 	// Create test runner
-	testRunner, err := runner.NewTestRunner(*handlerPath, *handlerTimeout)
+	testRunner, err := runner.NewTestRunner(*handlerPath, *handlerTimeout, *timeout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating test runner: %v\n", err)
 		os.Exit(1)
 	}
 	defer testRunner.CloseHandler()
+
+	// Create context with total execution timeout
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
 
 	// Run tests
 	totalPassed := 0
@@ -59,7 +65,7 @@ func main() {
 		}
 
 		// Run suite
-		result := testRunner.RunTestSuite(*suite)
+		result := testRunner.RunTestSuite(ctx, *suite)
 		printResults(suite, result)
 
 		totalPassed += result.PassedTests

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -15,12 +16,15 @@ import (
 type TestRunner struct {
 	handler       *Handler
 	handlerConfig *HandlerConfig
+	timeout       time.Duration
 }
 
 // NewTestRunner creates a new test runner for executing test suites against a handler binary.
 // The handlerTimeout parameter specifies the maximum duration to wait for the handler to
 // respond to each test case. If zero, defaults to 10 seconds.
-func NewTestRunner(handlerPath string, handlerTimeout time.Duration) (*TestRunner, error) {
+// The timeout parameter specifies the total duration allowed for running all tests
+// across all test suites. If zero, defaults to 30 seconds.
+func NewTestRunner(handlerPath string, handlerTimeout time.Duration, timeout time.Duration) (*TestRunner, error) {
 	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("handler binary not found: %s", handlerPath)
 	}
@@ -33,12 +37,17 @@ func NewTestRunner(handlerPath string, handlerTimeout time.Duration) (*TestRunne
 		return nil, err
 	}
 
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
 	return &TestRunner{
 		handler: handler,
 		handlerConfig: &HandlerConfig{
 			Path:    handlerPath,
 			Timeout: handlerTimeout,
 		},
+		timeout: timeout,
 	}, nil
 }
 
@@ -89,15 +98,16 @@ func (tr *TestRunner) CloseHandler() {
 	tr.handler = nil
 }
 
-// RunTestSuite executes a test suite
-func (tr *TestRunner) RunTestSuite(suite TestSuite) TestResult {
+// RunTestSuite executes a test suite. The context can be used to enforce a total
+// execution timeout across all test suites.
+func (tr *TestRunner) RunTestSuite(ctx context.Context, suite TestSuite) TestResult {
 	result := TestResult{
 		SuiteName:  suite.Name,
 		TotalTests: len(suite.Tests),
 	}
 
 	for _, test := range suite.Tests {
-		testResult := tr.runTest(test)
+		testResult := tr.runTest(ctx, test)
 		result.TestResults = append(result.TestResults, testResult)
 		if testResult.Passed {
 			result.PassedTests++
@@ -111,7 +121,18 @@ func (tr *TestRunner) RunTestSuite(suite TestSuite) TestResult {
 
 // runTest executes a single test case by sending a request, reading the response,
 // and validating the result matches expected output
-func (tr *TestRunner) runTest(test TestCase) SingleTestResult {
+func (tr *TestRunner) runTest(ctx context.Context, test TestCase) SingleTestResult {
+	// Check if context is already cancelled
+	select {
+	case <-ctx.Done():
+		return SingleTestResult{
+			TestID:  test.ID,
+			Passed:  false,
+			Message: fmt.Sprintf("Total execution timeout exceeded (%v)", tr.timeout),
+		}
+	default:
+	}
+
 	req := Request{
 		ID:     test.ID,
 		Method: test.Method,
