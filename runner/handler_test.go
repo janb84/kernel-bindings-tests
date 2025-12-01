@@ -2,9 +2,11 @@ package runner
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 )
 
 const (
@@ -14,12 +16,14 @@ const (
 	// envTestHelperName specifies which helper function to execute in subprocess mode.
 	envTestHelperName = "TEST_HELPER_NAME"
 
-	helperNameNormal = "normal"
+	helperNameNormal       = "normal"
+	helperNameUnresponsive = "unresponsive"
 )
 
 // testHelpers maps helper names to functions that simulate different handler behaviors.
 var testHelpers = map[string]func(){
-	helperNameNormal: helperNormal,
+	helperNameNormal:       helperNormal,
+	helperNameUnresponsive: helperUnresponsive,
 }
 
 // TestMain allows the test binary to serve two purposes:
@@ -46,7 +50,7 @@ func TestMain(m *testing.M) {
 
 // TestHandler_NormalOperation tests that a well-behaved handler works correctly
 func TestHandler_NormalOperation(t *testing.T) {
-	h, err := newHandlerForTest(t, helperNameNormal)
+	h, err := newHandlerForTest(t, helperNameNormal, 0)
 	if err != nil {
 		t.Fatalf("Failed to create handler: %v", err)
 	}
@@ -86,13 +90,60 @@ func helperNormal() {
 	}
 }
 
+// TestHandler_Unresponsive tests that the runner correctly handles an unresponsive handler
+func TestHandler_Unresponsive(t *testing.T) {
+	h, err := newHandlerForTest(t, helperNameUnresponsive, 100*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Failed to create handler: %v", err)
+	}
+	defer h.Close()
+
+	// Send a request to the handler
+	request := `{"id":1,"method":"test"}`
+	if err := h.SendLine([]byte(request)); err != nil {
+		t.Fatalf("Failed to send request: %v", err)
+	}
+
+	// Try to read the response - should Timeout
+	start := time.Now()
+	_, err = h.ReadLine()
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Expected error from unresponsive handler, got nil")
+	}
+
+	// Verify it's the Timeout error we expect
+	if !errors.Is(err, ErrHandlerTimeout) {
+		t.Errorf("Expected ErrHandlerTimeout, got: %v", err)
+	}
+
+	// Verify Timeout happened quickly (within reasonable margin)
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("Timeout took too long: %v (expected ~100ms)", elapsed)
+	}
+}
+
+// helperUnresponsive simulates a handler that receives requests but never responds,
+// triggering the Timeout mechanism in the runner.
+func helperUnresponsive() {
+	// Read from stdin to prevent broken pipe, but never write responses
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		// Sleep indefinitely to simulate unresponsiveness
+		time.Sleep(1 * time.Hour)
+	}
+}
+
 // newHandlerForTest creates a Handler that runs a test helper as a subprocess.
 // The helperName identifies which helper to run (e.g., "normal", "crash", "hang").
-func newHandlerForTest(t *testing.T, helperName string) (*Handler, error) {
+// The timeout parameter sets the per-request timeout (0 uses default).
+func newHandlerForTest(t *testing.T, helperName string, timeout time.Duration) (*Handler, error) {
 	t.Helper()
 
-	return NewHandler(HandlerConfig{
-		Path: os.Args[0],
-		Env:  []string{"TEST_AS_SUBPROCESS=1", "TEST_HELPER_NAME=" + helperName},
+	return NewHandler(&HandlerConfig{
+		Path:    os.Args[0],
+		Env:     []string{"TEST_AS_SUBPROCESS=1", "TEST_HELPER_NAME=" + helperName},
+		Timeout: timeout,
 	})
 }

@@ -23,18 +23,23 @@ type HandlerConfig struct {
 	Path string
 	Args []string
 	Env  []string
+	// Timeout specifies the maximum duration to wait when reading from the handler's
+	// stdout. If zero, defaults to 10 seconds. The handler is killed if it fails to
+	// write output within this timeout.
+	Timeout time.Duration
 }
 
 // Handler manages a conformance handler process communicating via stdin/stdout
 type Handler struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Scanner
-	stderr io.ReadCloser
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  *bufio.Scanner
+	stderr  io.ReadCloser
+	timeout time.Duration
 }
 
 // NewHandler spawns a new handler process with the given configuration
-func NewHandler(cfg HandlerConfig) (*Handler, error) {
+func NewHandler(cfg *HandlerConfig) (*Handler, error) {
 	cmd := exec.Command(cfg.Path, cfg.Args...)
 	if cfg.Env != nil {
 		cmd.Env = append(cmd.Environ(), cfg.Env...)
@@ -60,11 +65,17 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 		return nil, fmt.Errorf("failed to start handler: %w", err)
 	}
 
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+
 	return &Handler{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: bufio.NewScanner(stdout),
-		stderr: stderr,
+		cmd:     cmd,
+		stdin:   stdin,
+		stdout:  bufio.NewScanner(stdout),
+		stderr:  stderr,
+		timeout: timeout,
 	}, nil
 }
 
@@ -74,7 +85,7 @@ func (h *Handler) SendLine(line []byte) error {
 	return err
 }
 
-// ReadLine reads a line from the handler's stdout with a 10-second timeout
+// ReadLine reads a line from the handler's stdout with a configurable timeout
 func (h *Handler) ReadLine() ([]byte, error) {
 	// Use a timeout for Scan() in case the handler hangs
 	scanDone := make(chan bool, 1)
@@ -93,7 +104,7 @@ func (h *Handler) ReadLine() ([]byte, error) {
 		}
 		// EOF - handler closed stdout prematurely, fall through to kill and capture stderr
 		baseErr = ErrHandlerClosed
-	case <-time.After(10 * time.Second):
+	case <-time.After(h.timeout):
 		// Timeout - handler didn't respond, fall through to kill and capture stderr
 		baseErr = ErrHandlerTimeout
 	}

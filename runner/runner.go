@@ -8,35 +8,44 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // TestRunner executes test suites against a handler binary
 type TestRunner struct {
-	handlerPath string
-	handler     *Handler
+	handler       *Handler
+	handlerConfig *HandlerConfig
 }
 
-// NewTestRunner creates a new test runner
-func NewTestRunner(handlerPath string) (*TestRunner, error) {
+// NewTestRunner creates a new test runner for executing test suites against a handler binary.
+// The handlerTimeout parameter specifies the maximum duration to wait for the handler to
+// respond to each test case. If zero, defaults to 10 seconds.
+func NewTestRunner(handlerPath string, handlerTimeout time.Duration) (*TestRunner, error) {
 	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("handler binary not found: %s", handlerPath)
 	}
 
-	handler, err := NewHandler(HandlerConfig{Path: handlerPath})
+	handler, err := NewHandler(&HandlerConfig{
+		Path:    handlerPath,
+		Timeout: handlerTimeout,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &TestRunner{
-		handlerPath: handlerPath,
-		handler:     handler,
+		handler: handler,
+		handlerConfig: &HandlerConfig{
+			Path:    handlerPath,
+			Timeout: handlerTimeout,
+		},
 	}, nil
 }
 
 // SendRequest sends a request to the handler, spawning a new handler if needed
 func (tr *TestRunner) SendRequest(req Request) error {
 	if tr.handler == nil {
-		handler, err := NewHandler(HandlerConfig{Path: tr.handlerPath})
+		handler, err := NewHandler(tr.handlerConfig)
 		if err != nil {
 			return fmt.Errorf("failed to spawn new handler: %w", err)
 		}

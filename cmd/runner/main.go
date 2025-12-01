@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/stringintech/kernel-bindings-tests/runner"
 	"github.com/stringintech/kernel-bindings-tests/testdata"
@@ -13,6 +14,7 @@ import (
 
 func main() {
 	handlerPath := flag.String("handler", "", "Path to handler binary")
+	handlerTimeout := flag.Duration("handler-timeout", 10*time.Second, "Max time to wait for handler to respond to each test case (e.g., 10s, 500ms)")
 	flag.Parse()
 
 	if *handlerPath == "" {
@@ -34,7 +36,7 @@ func main() {
 	}
 
 	// Create test runner
-	testRunner, err := runner.NewTestRunner(*handlerPath)
+	testRunner, err := runner.NewTestRunner(*handlerPath, *handlerTimeout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating test runner: %v\n", err)
 		os.Exit(1)
