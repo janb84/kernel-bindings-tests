@@ -52,7 +52,19 @@ make runner
 
 # Run the test runner against your handler binary
 ./build/runner --handler <path-to-your-handler>
+
+# Configure timeouts (optional)
+./build/runner --handler <path-to-your-handler> \
+  --handler-timeout 30s \  # Max wait per test case (default: 10s)
+  --timeout 2m             # Total execution limit (default: 30s)
 ```
+
+#### Timeout Flags
+
+- **`--handler-timeout`** (default: 10s): Maximum time to wait for handler response to each test case. Prevents hangs on unresponsive handlers.
+- **`--timeout`** (default: 30s): Total execution time limit across all test suites. Ensures bounded test runs.
+
+The runner automatically detects and recovers from crashed/unresponsive handlers, allowing remaining tests to continue.
 
 ### Testing the Runner
 
